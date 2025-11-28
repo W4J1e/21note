@@ -298,7 +298,7 @@ function App() {
     
     // 定义CORS代理服务器列表
     const proxyServers = isDevelopment ? 
-      // 开发环境：使用本地代理路由
+      // 开发环境：使用本地代理路由（本地代理处理跨域）
       [
         // 首选代理服务器：codetabs API（使用本地代理）
         `/api/proxy/?quest=${encodeURIComponent(url)}`,
@@ -307,7 +307,7 @@ function App() {
         // 备用代理服务器：allorigins API（使用本地代理）
         `/api/allorigins?url=${encodeURIComponent(url)}`,
       ] : 
-      // 生产环境：直接使用外部API（处理跨域问题）
+      // 生产环境：直接使用外部API
       [
         // 首选代理服务器：codetabs API（直接访问）
         `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
@@ -447,9 +447,48 @@ function App() {
       // 解析HTML内容
       const doc = parser.parseFromString(htmlContent, 'text/html');
       
-      // 使用Readability提取内容
-      const reader = new Readability(doc);
-      const articleData = reader.parse();
+      // 尝试多种方法提取内容，提高成功率
+      let articleData = null;
+      
+      try {
+        // 方法1：使用Readability提取内容
+        const reader = new Readability(doc);
+        articleData = reader.parse();
+        
+        if (articleData && articleData.content) {
+          console.log('使用Readability成功提取内容');
+        } else {
+          console.log('Readability提取失败，尝试备用方法');
+          
+          // 方法2：尝试直接从body提取内容
+          const bodyContent = doc.body.innerHTML;
+          if (bodyContent) {
+            articleData = {
+              title: doc.title || '无标题',
+              content: bodyContent,
+              excerpt: ''
+            };
+            console.log('使用直接提取body内容成功');
+          }
+        }
+      } catch (readabilityError) {
+        console.error('Readability处理出错:', readabilityError);
+        
+        // 方法3：出错时尝试直接从body提取内容
+        try {
+          const bodyContent = doc.body.innerHTML;
+          if (bodyContent) {
+            articleData = {
+              title: doc.title || '无标题',
+              content: bodyContent,
+              excerpt: ''
+            };
+            console.log('出错后使用直接提取body内容成功');
+          }
+        } catch (bodyError) {
+          console.error('直接提取body内容也失败:', bodyError);
+        }
+      }
       
       if (articleData) {
         // 构造与mercury-parser兼容的结果格式
@@ -463,7 +502,29 @@ function App() {
         setEditableContent(result.content);
         setStatus('内容提取成功！');
       } else {
-        throw new Error('无法提取网页内容，请检查链接是否有效或页面结构是否复杂');
+        // 最后尝试：如果所有方法都失败，使用简化的HTML内容
+        try {
+          const simplifiedContent = `<div>${doc.body.textContent.substring(0, 1000)}...</div>`;
+          articleData = {
+            title: doc.title || '无标题',
+            content: simplifiedContent,
+            excerpt: ''
+          };
+          
+          const result = {
+            title: articleData.title,
+            content: articleData.content,
+            excerpt: articleData.excerpt,
+            url: url
+          };
+          setArticle(result);
+          setEditableContent(result.content);
+          setStatus('内容提取成功（简化版）！');
+          console.log('使用简化内容提取成功');
+        } catch (finalError) {
+          console.error('所有提取方法都失败:', finalError);
+          throw new Error('无法提取网页内容，请检查链接是否有效或页面结构是否复杂');
+        }
       }
     } catch (err) {
       console.error('提取内容失败:', err);
