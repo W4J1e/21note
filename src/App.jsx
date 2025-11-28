@@ -326,7 +326,7 @@ function App() {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': window.location.origin,
+            'Referer': url, // 使用用户输入的网址作为Referer，伪造来源地址
             'Connection': 'keep-alive',
             'Cache-Control': 'max-age=0',
             'Upgrade-Insecure-Requests': '1',
@@ -380,7 +380,11 @@ function App() {
             'Accept-Encoding': 'gzip, deflate, br',
             'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3',
             'Connection': 'keep-alive',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': url, // 使用用户输入的网址作为Referer，伪造来源地址
+            'Cache-Control': 'max-age=0',
+            'Upgrade-Insecure-Requests': '1',
+            'DNT': '1'
           },
           // 禁用HTTP/2
           keepalive: true
@@ -430,6 +434,10 @@ function App() {
         console.log('响应不是JSON格式或解析失败，直接使用文本内容');
       }
       
+      // 增加调试信息：记录HTML内容的基本信息
+      console.log('HTML内容长度:', htmlContent.length);
+      console.log('HTML内容前100字符:', htmlContent.substring(0, 100));
+      
       // 解析HTML内容
       const doc = parser.parseFromString(htmlContent, 'text/html');
       
@@ -441,20 +449,40 @@ function App() {
         const reader = new Readability(doc);
         articleData = reader.parse();
         
-        if (articleData && articleData.content) {
-          console.log('使用Readability成功提取内容');
+        if (articleData && articleData.content && articleData.content.trim()) {
+          console.log('使用Readability成功提取内容，内容长度:', articleData.content.length);
         } else {
-          console.log('Readability提取失败，尝试备用方法');
+          console.log('Readability提取失败或内容为空，尝试备用方法');
           
-          // 方法2：尝试直接从body提取内容
-          const bodyContent = doc.body.innerHTML;
-          if (bodyContent) {
-            articleData = {
-              title: doc.title || '无标题',
-              content: bodyContent,
-              excerpt: ''
-            };
-            console.log('使用直接提取body内容成功');
+          // 方法2：尝试直接从body提取内容，并优化处理
+          try {
+            const body = doc.body;
+            if (body) {
+              // 清理body内容，移除不必要的脚本和样式
+              const scripts = body.querySelectorAll('script');
+              scripts.forEach(script => script.remove());
+              
+              const styles = body.querySelectorAll('style');
+              styles.forEach(style => style.remove());
+              
+              // 移除可能影响显示的元素
+              const iframes = body.querySelectorAll('iframe');
+              iframes.forEach(iframe => iframe.remove());
+              
+              const bodyContent = body.innerHTML;
+              if (bodyContent && bodyContent.trim()) {
+                articleData = {
+                  title: doc.title || '无标题',
+                  content: bodyContent,
+                  excerpt: ''
+                };
+                console.log('使用直接提取body内容成功，清理后内容长度:', bodyContent.length);
+              } else {
+                console.log('直接提取body内容为空');
+              }
+            }
+          } catch (bodyError) {
+            console.error('直接提取body内容出错:', bodyError);
           }
         }
       } catch (readabilityError) {
@@ -462,21 +490,31 @@ function App() {
         
         // 方法3：出错时尝试直接从body提取内容
         try {
-          const bodyContent = doc.body.innerHTML;
-          if (bodyContent) {
-            articleData = {
-              title: doc.title || '无标题',
-              content: bodyContent,
-              excerpt: ''
-            };
-            console.log('出错后使用直接提取body内容成功');
+          const body = doc.body;
+          if (body) {
+            // 清理body内容
+            const scripts = body.querySelectorAll('script');
+            scripts.forEach(script => script.remove());
+            
+            const styles = body.querySelectorAll('style');
+            styles.forEach(style => style.remove());
+            
+            const bodyContent = body.innerHTML;
+            if (bodyContent && bodyContent.trim()) {
+              articleData = {
+                title: doc.title || '无标题',
+                content: bodyContent,
+                excerpt: ''
+              };
+              console.log('出错后使用直接提取body内容成功，内容长度:', bodyContent.length);
+            }
           }
         } catch (bodyError) {
           console.error('直接提取body内容也失败:', bodyError);
         }
       }
       
-      if (articleData) {
+      if (articleData && articleData.content && articleData.content.trim()) {
         // 构造与mercury-parser兼容的结果格式
         const result = {
           title: articleData.title,
@@ -487,13 +525,30 @@ function App() {
         setArticle(result);
         setEditableContent(result.content);
         setStatus('内容提取成功！');
+        console.log('最终提取的内容长度:', articleData.content.length);
       } else {
         // 最后尝试：如果所有方法都失败，使用简化的HTML内容
         try {
-          const simplifiedContent = `<div>${doc.body.textContent.substring(0, 1000)}...</div>`;
+          let finalContent = '';
+          
+          // 尝试获取body文本内容
+          if (doc.body && doc.body.textContent) {
+            const textContent = doc.body.textContent;
+            if (textContent.trim()) {
+              finalContent = `<div class="simple-content">${textContent.substring(0, 2000)}${textContent.length > 2000 ? '...' : ''}</div>`;
+              console.log('使用body文本内容，长度:', finalContent.length);
+            }
+          }
+          
+          // 如果还是没有内容，尝试从HTML中提取可见文本
+          if (!finalContent) {
+            finalContent = `<div class="simple-content">无法提取结构化内容，但成功获取了网页。</div>`;
+            console.log('使用默认内容');
+          }
+          
           articleData = {
             title: doc.title || '无标题',
-            content: simplifiedContent,
+            content: finalContent,
             excerpt: ''
           };
           
