@@ -293,13 +293,29 @@ function App() {
     setStatus('正在提取内容...');
     setError('');
 
-    // 定义CORS代理服务器列表（使用本地代理，解决跨域问题）
-    const proxyServers = [
-      // 主要代理服务器（使用本地代理）
-      `/api/proxy/?quest=${encodeURIComponent(url)}`,
-      // 备用代理服务器（使用本地代理）
-      `/api/allorigins?url=${encodeURIComponent(url)}`,
-    ];
+    // 检测当前环境（开发环境使用Vite代理，生产环境直接使用外部API）
+    const isDevelopment = import.meta.env.DEV;
+    
+    // 定义CORS代理服务器列表
+    const proxyServers = isDevelopment ? 
+      // 开发环境：使用本地代理路由
+      [
+        // 首选代理服务器：codetabs API（使用本地代理）
+        `/api/proxy/?quest=${encodeURIComponent(url)}`,
+        // 备用代理服务器：webpagesnap.com API（使用本地代理）
+        `/api/webpagesnap?url=${encodeURIComponent(url)}`,
+        // 备用代理服务器：allorigins API（使用本地代理）
+        `/api/allorigins?url=${encodeURIComponent(url)}`,
+      ] : 
+      // 生产环境：直接使用外部API（处理跨域问题）
+      [
+        // 首选代理服务器：codetabs API（直接访问）
+        `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+        // 备用代理服务器：webpagesnap.com API（直接访问）
+        `https://webpagesnap.com/api/scrape?url=${encodeURIComponent(url)}`,
+        // 备用代理服务器：allorigins API（直接访问）
+        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      ];
 
     let proxyResponse = null;
     let proxyError = null;
