@@ -1,0 +1,28 @@
+{
+  "outputDirectory": "./dist",
+  "nodeVersion": "22.11.0",
+  "headers": [
+    {
+      "source": "/api/*",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type"
+        }
+      ]
+    }
+  ],
+  "cloudFunctions": {
+    "nodejs": {
+      "maxDuration": 60
+    }
+  }
+}

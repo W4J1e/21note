@@ -293,13 +293,9 @@ function App() {
     setStatus('正在提取内容...');
     setError('');
 
-    // 定义CORS代理服务器列表（所有环境统一使用本地代理路由，由服务器端处理跨域）
     const proxyServers = [
-      // 首选代理服务器：codetabs API（使用本地代理）
-      `/api/proxy/?quest=${encodeURIComponent(url)}`,
-      // 备用代理服务器：webpagesnap.com API（使用本地代理）
+      `/api/proxy?quest=${encodeURIComponent(url)}`,
       `/api/webpagesnap?url=${encodeURIComponent(url)}`,
-      // 备用代理服务器：allorigins API（使用本地代理）
       `/api/allorigins?url=${encodeURIComponent(url)}`,
     ];
 
